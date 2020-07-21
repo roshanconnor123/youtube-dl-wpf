@@ -1,10 +1,11 @@
 ﻿using MaterialDesignThemes.Wpf;
 using PeanutButter.TinyEventAggregator;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
@@ -20,7 +21,6 @@ namespace youtube_dl_wpf
 
             _link = "";
             _container = "Auto";
-            _format = "Auto";
             _enableFormatSelection = true;
             _addMetadata = true;
             _downloadThumbnail = true;
@@ -49,30 +49,30 @@ namespace youtube_dl_wpf
                 "mp3"
             };
 
-            FormatList = new ObservableCollection<string>()
-            {
-                "Auto",
-                "bestvideo+bestaudio/best",
-                "bestvideo+bestaudio",
-                "bestvideo+worstaudio",
-                "worstvideo+bestaudio",
-                "worstvideo+worstaudio",
-                "worstvideo+worstaudio/worst",
-                "best",
-                "worst",
-                "bestvideo",
-                "worstvideo",
-                "bestaudio",
-                "worstaudio",
-                "YouTube 4K 60fps HDR webm (337+251)",
-                "YouTube 4K 60fps webm (315+251)",
-                "YouTube 4K 60fps AV1 (401+140)",
-                "YouTube 4K webm (313+251)",
-                "YouTube 1080p60 webm (303+251)",
-                "YouTube 1080p webm (248+251)",
-                "1080p",
-                "720p"
-            };
+            FormatDict = new Dictionary<string, string>();
+            FormatDict.Add("Auto", "Auto");
+            FormatDict.Add("bestvideo+bestaudio/best", "Best Video + Best Audio / Best");
+            FormatDict.Add("bestvideo+bestaudio", "Best Video + Best Audio");
+            FormatDict.Add("bestvideo+worstaudio", "Best Video + Worst Audio");
+            FormatDict.Add("worstvideo+bestaudio", "Worst Video + Best Audio");
+            FormatDict.Add("worstvideo+worstaudio", "Worst Video + Worst Audio");
+            FormatDict.Add("worstvideo+worstaudio/worst", "Worst Video + Worst Audio / Worst");
+            FormatDict.Add("best", "Best");
+            FormatDict.Add("worst", "Worst");
+            FormatDict.Add("bestvideo", "Best Video");
+            FormatDict.Add("worstvideo", "Worst Video");
+            FormatDict.Add("bestaudio", "Best Audio");
+            FormatDict.Add("worstaudio", "Worst Audio");
+            FormatDict.Add("337+251", "YouTube 4K 60fps HDR WebM");
+            FormatDict.Add("315+251", "YouTube 4K 60fps WebM");
+            FormatDict.Add("401+140", "YouTube 4K 60fps AV1");
+            FormatDict.Add("313+251", "YouTube 4K WebM");
+            FormatDict.Add("303+251", "YouTube 1080p60 webm");
+            FormatDict.Add("248+251", "YouTube 1080p webm");
+            FormatDict.Add("1080p", "1080p");
+            FormatDict.Add("720p", "720p");
+
+            _format = FormatDict.First();
 
             settingsFromHomeEvent = EventAggregator.Instance.GetEvent<SettingsFromHomeEvent>();
             // subscribe to settings changes from SettingsViewModel
@@ -89,7 +89,7 @@ namespace youtube_dl_wpf
 
         private string _link;
         private string _container;
-        private string _format;
+        private KeyValuePair<string, string> _format;
         private bool _enableFormatSelection;
         private bool _addMetadata;
         private bool _downloadThumbnail;
@@ -121,8 +121,12 @@ namespace youtube_dl_wpf
         /// </summary>
         private void ApplySettings()
         {
+            if (FormatDict.TryGetValue(_settings.Format, out string? value))
+                SetProperty(ref _format, new KeyValuePair<string, string>(_settings.Format, value));
+            else
+                SetProperty(ref _format, new KeyValuePair<string, string>(_settings.Format, _settings.Format));
+
             SetProperty(ref _container, _settings.Container);
-            SetProperty(ref _format, _settings.Format);
             SetProperty(ref _addMetadata, _settings.AddMetadata);
             SetProperty(ref _downloadThumbnail, _settings.DownloadThumbnail);
             SetProperty(ref _downloadSubtitles, _settings.DownloadSubtitles);
@@ -244,10 +248,10 @@ namespace youtube_dl_wpf
                     dlProcess.StartInfo.ArgumentList.Add("-f");
                     dlProcess.StartInfo.ArgumentList.Add($"{_container}");
                 }
-                else if (_format != "Auto")
+                else if (_format.Key != "Auto")
                 {
                     dlProcess.StartInfo.ArgumentList.Add("-f");
-                    dlProcess.StartInfo.ArgumentList.Add($"{_format}");
+                    dlProcess.StartInfo.ArgumentList.Add($"{_format.Key}");
                 }
                 if (_addMetadata)
                     dlProcess.StartInfo.ArgumentList.Add("--add-metadata");
@@ -423,22 +427,22 @@ namespace youtube_dl_wpf
                 else
                 {
                     EnableFormatSelection = false;
-                    Format = "Auto";
+                    Format = FormatDict.First();
                 }
                 _settings.Container = _container;
                 PublishSettings();
             }
         }
 
-        public ObservableCollection<string> FormatList { get; }
+        public Dictionary<string, string> FormatDict { get; }
 
-        public string Format
+        public KeyValuePair<string, string> Format
         {
             get => _format;
             set
             {
                 SetProperty(ref _format, value);
-                _settings.Format = _format;
+                _settings.Format = _format.Key;
                 PublishSettings();
             }
         }

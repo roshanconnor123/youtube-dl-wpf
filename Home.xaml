@@ -80,12 +80,22 @@
                         </ComboBox.ItemsPanel>
                     </ComboBox>
                     <TextBlock VerticalAlignment="Center" Margin="8">Format</TextBlock>
-                    <ComboBox ItemsSource="{Binding FormatList}"
-                              SelectedValue="{Binding Format}"
+                    <ComboBox ItemsSource="{Binding FormatDict}"
+                              SelectedItem="{Binding Format}"
                               IsEnabled="{Binding EnableFormatSelection}"
                               IsEditable="True"
                               IsReadOnly="False"
                               Margin="0 8 8 8">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding Value}" />
+                                    <TextBlock Text=" (" />
+                                    <TextBlock Text="{Binding Key}" />
+                                    <TextBlock Text=")" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
                         <ComboBox.ItemsPanel>
                             <ItemsPanelTemplate>
                                 <VirtualizingStackPanel />
