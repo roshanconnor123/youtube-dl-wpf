@@ -1,5 +1,10 @@
 ﻿using MaterialDesignThemes.Wpf;
 using ReactiveUI;
+using ReactiveUI.Fody.Helpers;
+using Serilog;
+using Splat;
+using Splat.Serilog;
+using System;
 using System.ComponentModel;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,41 +14,65 @@ namespace YoutubeDl.Wpf.ViewModels
 {
     public class MainWindowViewModel : ReactiveObject
     {
-        private readonly Settings _settings;
         private readonly ISnackbarMessageQueue _snackbarMessageQueue;
+        private readonly Settings _settings;
 
-        public HomeViewModel HomeVM { get; }
-        public SettingsViewModel SettingsVM { get; }
+        public ObservableSettings SharedSettings { get; }
+        public BackendService BackendService { get; }
+        public PresetDialogViewModel PresetDialogVM { get; }
         public object[] Tabs { get; }
+
+        [Reactive]
+        public bool IsDialogOpen { get; set; }
 
         public ReactiveCommand<CancelEventArgs?, bool> SaveSettingsAsyncCommand { get; }
 
         public MainWindowViewModel(ISnackbarMessageQueue snackbarMessageQueue)
         {
-            var (settings, loadSettingsErrMsg) = Settings.LoadSettingsAsync().GetAwaiter().GetResult();
-            if (loadSettingsErrMsg is not null)
-                snackbarMessageQueue.Enqueue(loadSettingsErrMsg);
-
-            _settings = settings;
             _snackbarMessageQueue = snackbarMessageQueue;
 
-            HomeVM = new(settings, snackbarMessageQueue);
-            SettingsVM = new(settings, snackbarMessageQueue);
-            Tabs = new object[]
+            try
             {
-                HomeVM,
-                SettingsVM,
-            };
+                _settings = Settings.LoadAsync().GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                snackbarMessageQueue.Enqueue(ex.Message);
+                _settings = new();
+            }
+
+            // Configure logging.
+            var queuedTextBoxsink = new QueuedTextBoxSink(_settings);
+            var logger = new LoggerConfiguration()
+                .WriteTo.Sink(queuedTextBoxsink)
+                .CreateLogger();
+            Locator.CurrentMutable.UseSerilogFullLogger(logger);
+
+            SharedSettings = new(_settings);
+            BackendService = new(SharedSettings);
+            PresetDialogVM = new(ControlDialog);
+            Tabs =
+            [
+                new HomeViewModel(SharedSettings, BackendService, queuedTextBoxsink, PresetDialogVM, snackbarMessageQueue),
+                new SettingsViewModel(SharedSettings, BackendService, snackbarMessageQueue),
+            ];
 
             SaveSettingsAsyncCommand = ReactiveCommand.CreateFromTask<CancelEventArgs?, bool>(SaveSettingsAsync);
         }
 
-        public async Task<bool> SaveSettingsAsync(CancelEventArgs? cancelEventArgs = null, CancellationToken cancellationToken = default)
+        private void ControlDialog(bool open) => IsDialogOpen = open;
+
+        private async Task<bool> SaveSettingsAsync(CancelEventArgs? cancelEventArgs = null, CancellationToken cancellationToken = default)
         {
-            var errMsg = await Settings.SaveSettingsAsync(_settings, cancellationToken);
-            if (errMsg is not null)
+            SharedSettings.UpdateAppSettings();
+
+            try
             {
-                _snackbarMessageQueue.Enqueue(errMsg);
+                await _settings.SaveAsync(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _snackbarMessageQueue.Enqueue(ex.Message);
 
                 // Cancel window closing
                 if (cancelEventArgs is not null)
@@ -51,10 +80,8 @@ namespace YoutubeDl.Wpf.ViewModels
 
                 return false;
             }
-            else
-            {
-                return true;
-            }
+
+            return true;
         }
     }
 }
